@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ערבי או מזרחי?</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>ערבי או מזרחי?</h1>
+    
+    <div class="game-area">
+      <div class="score-board">
+        <div>תשובות נכונות: <span id="correct-count">0</span></div>
+        <div>נסיונות: <span id="total-count">0</span>/20</div>
+      </div>
+      
+      <div class="progress">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+      
+      <div id="loading" class="loading">
+        טוען תמונות...
+      </div>
+      
+      <div id="game-container" style="display: none;">
+        <div class="image-container">
+          <img id="current-image" src="" alt="דמות">
+          <div id="result-overlay" class="result-overlay"></div>
+        </div>
+        
+        <div class="buttons">
+          <button id="btn-arab" class="btn btn-arab">ערבי</button>
+          <button id="btn-mizrahi" class="btn btn-mizrahi">מזרחי</button>
+        </div>
+        
+        <div>
+          מקור: <a id="source-link" href="#" target="_blank">צפה בערך בויקיפדיה</a>
+        </div>
+      </div>
+      
+      <div id="game-complete" style="display: none;">
+        <h2>משחק הסתיים!</h2>
+        <div id="final-score"></div>
+        <div id="final-message"></div>
+        <button id="play-again" class="btn" style="background-color: #9C27B0; color: white; margin-top: 20px;">שחק שוב</button>
+      </div>
+    </div>
+    
+    <div class="stats">
+      <h3>סטטיסטיקה</h3>
+      <div>אחוז הצלחה: <span id="success-rate">0%</span></div>
+      <div>שיעור הצלחה בזיהוי ערבים: <span id="arab-success-rate">0%</span></div>
+      <div>שיעור הצלחה בזיהוי מזרחים: <span id="mizrahi-success-rate">0%</span></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
