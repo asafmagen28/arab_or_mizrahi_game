@@ -43,8 +43,8 @@ class ImageService {
       
       if (match) {
         const size = parseInt(match[1]);
-        // תמונות קטנות מדי לרוב אינן תמונות פנים טובות
-        if (size < 100) {
+        // תמונות קטנות מדי לרוב אינן תמונות פנים טובות - הקטנת הסף מ-100 ל-80
+        if (size < 80) {
           console.log(`Rejected small image (${size}px): ${imageUrl}`);
           return false;
         }
@@ -87,7 +87,7 @@ class ImageService {
         }
       }
       
-      // אם אין לנו מספיק מידע מהשם, נחזיר true כברירת מחדל
+      // אם אין לנו מספיק מידע מהשם, נחזיר true כברירת מחדל - יותר מקל
       console.log(`No clear indicators for image, defaulting to accept: ${imageUrl}`);
       return true;
     } catch (error) {
@@ -130,8 +130,8 @@ class ImageService {
           if (isHuman) {
             humanPageIds.push(pageId);
           }
-          // השהייה קצרה בין בדיקות
-          await ApiUtils.sleep(300);
+          // השהייה קצרה בין בדיקות - מקוצר ל-200 מילישניות
+          await ApiUtils.sleep(200);
         } catch (error) {
           console.error(`Error checking if page ${pageId} is human:`, error.message);
         }
@@ -307,11 +307,11 @@ class ImageService {
       return this.todaysImages;
     }
     
-    // הגבלת מספר שמות המשפחה לחיפוש כדי להפחית את העומס
-    const limitedArabic = arabicLastNames.slice(0, 5);
-    const limitedMizrahi = mizrahiLastNames.slice(0, 5);
-    const limitedArabCategories = wikiCategories.arab.slice(0, 2);
-    const limitedMizrahiCategories = wikiCategories.mizrahi.slice(0, 2);
+    // הרחבת מספר שמות המשפחה לחיפוש
+    const limitedArabic = arabicLastNames.slice(0, 15); // הגדלה מ-5 ל-15
+    const limitedMizrahi = mizrahiLastNames.slice(0, 15); // הגדלה מ-5 ל-15
+    const limitedArabCategories = wikiCategories.arab.slice(0, 5); // הגדלה מ-2 ל-5
+    const limitedMizrahiCategories = wikiCategories.mizrahi.slice(0, 5); // הגדלה מ-2 ל-5
     
     // שליחת הבקשות באופן סדרתי כדי להפחית את העומס
     const arabResults = [];
@@ -326,13 +326,13 @@ class ImageService {
           console.log(`Found ${results.length} images for ${lastName}`);
           arabResults.push(...results);
           
-          // אם יש כבר מספיק תמונות, לא צריך להמשיך
-          if (arabResults.length >= IMAGES_PER_CATEGORY * 2) {
+          // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+          if (arabResults.length >= IMAGES_PER_CATEGORY * 3) {
             break;
           }
         }
-        // המתנה קצרה בין בקשות
-        await ApiUtils.sleep(1000);
+        // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+        await ApiUtils.sleep(500);
       } catch (error) {
         console.error(`Error fetching images for ${lastName}:`, error.message);
       }
@@ -347,20 +347,20 @@ class ImageService {
           console.log(`Found ${results.length} images for ${lastName}`);
           mizrahiResults.push(...results);
           
-          // אם יש כבר מספיק תמונות, לא צריך להמשיך
-          if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 2) {
+          // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+          if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 3) {
             break;
           }
         }
-        // המתנה קצרה בין בקשות
-        await ApiUtils.sleep(1000);
+        // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+        await ApiUtils.sleep(500);
       } catch (error) {
         console.error(`Error fetching images for ${lastName}:`, error.message);
       }
     }
     
-    // רק אם אין מספיק תמונות, נחפש גם בקטגוריות
-    if (arabResults.length < IMAGES_PER_CATEGORY) {
+    // אם אין מספיק תמונות, נחפש גם בקטגוריות - יותר מקיף
+    if (arabResults.length < IMAGES_PER_CATEGORY * 1.5) {
       console.log('Not enough Arab images, fetching categories...');
       for (const category of limitedArabCategories) {
         try {
@@ -369,20 +369,20 @@ class ImageService {
             console.log(`Found ${results.length} images for category ${category}`);
             arabResults.push(...results);
             
-            // אם יש כבר מספיק תמונות, לא צריך להמשיך
-            if (arabResults.length >= IMAGES_PER_CATEGORY * 2) {
+            // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+            if (arabResults.length >= IMAGES_PER_CATEGORY * 3) {
               break;
             }
           }
-          // המתנה קצרה בין בקשות
-          await ApiUtils.sleep(1000);
+          // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+          await ApiUtils.sleep(500);
         } catch (error) {
           console.error(`Error fetching images for category ${category}:`, error.message);
         }
       }
     }
     
-    if (mizrahiResults.length < IMAGES_PER_CATEGORY) {
+    if (mizrahiResults.length < IMAGES_PER_CATEGORY * 1.5) {
       console.log('Not enough Mizrahi images, fetching categories...');
       for (const category of limitedMizrahiCategories) {
         try {
@@ -391,13 +391,13 @@ class ImageService {
             console.log(`Found ${results.length} images for category ${category}`);
             mizrahiResults.push(...results);
             
-            // אם יש כבר מספיק תמונות, לא צריך להמשיך
-            if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 2) {
+            // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+            if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 3) {
               break;
             }
           }
-          // המתנה קצרה בין בקשות
-          await ApiUtils.sleep(1000);
+          // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+          await ApiUtils.sleep(500);
         } catch (error) {
           console.error(`Error fetching images for category ${category}:`, error.message);
         }
@@ -406,7 +406,13 @@ class ImageService {
     
     console.log(`Found ${arabResults.length} Arab images and ${mizrahiResults.length} Mizrahi images`);
 
-    // בחירת תמונות רנדומליות
+    // שמירת כל התמונות במאגר ההיסטורי לשימוש בעתיד
+    const allImages = [...arabResults, ...mizrahiResults];
+    if (allImages.length > 0) {
+      await dataService.updateHistoricalImages(allImages);
+    }
+
+    // בחירת תמונות רנדומליות - תמיד עד 10 (לפי קבוע IMAGES_PER_CATEGORY)
     const randomArabic = arabResults.sort(() => 0.5 - Math.random()).slice(0, Math.min(arabResults.length, IMAGES_PER_CATEGORY));
     const randomMizrahi = mizrahiResults.sort(() => 0.5 - Math.random()).slice(0, Math.min(mizrahiResults.length, IMAGES_PER_CATEGORY));
 
@@ -414,12 +420,8 @@ class ImageService {
     this.todaysImages = [...randomArabic, ...randomMizrahi].sort(() => 0.5 - Math.random());
     
     if (this.todaysImages.length > 0) {
-      // עדכון המאגר ההיסטורי רק אם הצלחנו להשיג תמונות
-      await dataService.updateHistoricalImages(this.todaysImages);
-      
-      // שמירת התמונות במאגר הקבוע
+      // שמירת התמונות היומיות במאגר הקבוע
       await dataService.saveDailyImages(this.todaysImages);
-  
       console.log(`Generated ${this.todaysImages.length} daily images`);
     } else {
       console.log('Failed to get any images. Using backup sample images...');
