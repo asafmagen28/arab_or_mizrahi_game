@@ -19,6 +19,7 @@ class DataService {
 
   /**
    * טעינת המאגר ההיסטורי
+   * @returns {Array} - מערך של תמונות היסטוריות
    */
   loadHistoricalImages() {
     try {
@@ -26,11 +27,13 @@ class DataService {
         const historyData = fs.readFileSync(this.historyFilePath, 'utf8');
         this.historicalImages = JSON.parse(historyData);
         console.log(`Loaded ${this.historicalImages.length} historical images`);
+        return this.historicalImages;
       }
     } catch (error) {
       console.error('Error loading historical images:', error);
       this.historicalImages = [];
     }
+    return [];
   }
 
   /**
@@ -53,7 +56,18 @@ class DataService {
       
       // שמירת רק X התמונות האחרונות כדי למנוע קובץ גדול מדי
       if (this.historicalImages.length > MAX_HISTORY_SIZE) {
-        this.historicalImages = this.historicalImages.slice(this.historicalImages.length - MAX_HISTORY_SIZE);
+        // שמירה על 20% מהמאגר הקודם באופן אקראי כדי לשמור על גיוון
+        const oldImagesCount = Math.floor(MAX_HISTORY_SIZE * 0.2);
+        const oldImages = this.historicalImages
+          .slice(0, this.historicalImages.length - newImages.length)
+          .sort(() => 0.5 - Math.random())
+          .slice(0, oldImagesCount);
+        
+        // שמירה על כל התמונות החדשות
+        const recentImages = this.historicalImages.slice(this.historicalImages.length - newImages.length);
+        
+        // מיזוג ההיסטורי עם החדש, עד גבול המאגר המקסימלי
+        this.historicalImages = [...oldImages, ...recentImages].slice(0, MAX_HISTORY_SIZE);
       }
       
       // שמירת המאגר ההיסטורי
