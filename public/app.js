@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
       mizrahiCorrect: 0,
       mizrahiTotal: 0,
       isProcessingGuess: false,  // משתנה שמצביע אם יש ניחוש בתהליך
-      failedImages: [] // מערך לשמירת מזהי תמונות שנכשלו בטעינה
+      failedImageAttempts: 0     // מונה לניסיונות שנכשלו ברצף
     };
   
     // מרכיבי ממשק המשתמש
@@ -31,8 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
       playAgain: document.getElementById('play-again'),
       successRate: document.getElementById('success-rate'),
       arabSuccessRate: document.getElementById('arab-success-rate'),
-      mizrahiSuccessRate: document.getElementById('mizrahi-success-rate'),
-      imageLoader: document.getElementById('image-loader') // אלמנט חדש למצב טעינה של תמונה
+      mizrahiSuccessRate: document.getElementById('mizrahi-success-rate')
     };
   
     // טעינת תמונות היום מהשרת
@@ -66,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
       gameState.arabTotal = 0;
       gameState.mizrahiCorrect = 0;
       gameState.mizrahiTotal = 0;
-      gameState.failedImages = [];
+      gameState.failedImageAttempts = 0;
       
       // עדכון ממשק
       updateScoreDisplay();
@@ -88,50 +87,68 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const currentImage = gameState.images[gameState.currentIndex];
       
-      // בדיקה אם התמונה הזו כבר נכשלה בעבר
-      if (gameState.failedImages.includes(currentImage.id)) {
-        console.log(`Skipping previously failed image: ${currentImage.id}`);
-        gameState.currentIndex++;
-        loadCurrentImage();
+      // בדיקה אם היו יותר מדי ניסיונות שנכשלו ברצף
+      if (gameState.failedImageAttempts > 5) {
+        // מציג הודעת שגיאה מתאימה
+        console.error('Too many failed image loads in a row, moving to end game');
+        gameState.failedImageAttempts = 0; // איפוס המונה
+        endGame();
         return;
       }
-      
-      // הצגת מצב טעינה
-      if (elements.imageLoader) {
-        elements.imageLoader.style.display = 'flex';
-      }
-      
-      // הוספת מאזין לטעינה מוצלחת
-      elements.currentImage.onload = function() {
-        // הסתרת מצב טעינה
-        if (elements.imageLoader) {
-          elements.imageLoader.style.display = 'none';
-        }
-      };
-      
-      // הוספת מאזין לשגיאת טעינה
+
+      // הוספת מאזין "onerror" לטיפול בכישלון טעינת תמונה
       elements.currentImage.onerror = function() {
         console.error(`Failed to load image: ${currentImage.imageUrl}`);
+        gameState.failedImageAttempts++; // להגדיל את מונה הניסיונות שנכשלו
         
-        // תיעוד התמונה שנכשלה
-        gameState.failedImages.push(currentImage.id);
+        // הצגת מחוון שגיאה
+        showImageError();
         
-        // שליחת מידע על התמונה שנכשלה לשרת
-        logImageError(currentImage).catch(err => 
-          console.error('Error logging image failure:', err)
-        );
+        // נסה לעבור לתמונה הבאה אחרי 1.5 שניות
+        setTimeout(() => {
+          gameState.currentIndex++;
+          loadCurrentImage();
+        }, 1500);
+      };
+
+      // הוספת מאזין "onload" לאיפוס מונה הניסיונות שנכשלו
+      elements.currentImage.onload = function() {
+        // איפוס מונה הניסיונות שנכשלו כאשר תמונה נטענת בהצלחה
+        gameState.failedImageAttempts = 0;
         
-        // מעבר אוטומטי לתמונה הבאה
-        gameState.currentIndex++;
-        loadCurrentImage();
+        // הסרת מחוון שגיאה אם קיים
+        clearImageError();
       };
       
-      // התחלת טעינת התמונה
       elements.currentImage.src = currentImage.imageUrl;
       elements.sourceLink.href = currentImage.sourceUrl;
       
       // הסרת הסטטוס הקודם
       elements.resultOverlay.classList.remove('show', 'correct', 'incorrect');
+    }
+
+    // הצגת שגיאת טעינת תמונה
+    function showImageError() {
+      // בדיקה אם כבר קיים אלמנט שגיאה
+      if (document.querySelector('.image-error')) {
+        return;
+      }
+      
+      // יצירת אלמנט שגיאה
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'image-error';
+      errorDiv.innerHTML = '<div>שגיאה בטעינת התמונה</div><div>עובר לתמונה הבאה...</div>';
+      
+      // הוספת האלמנט למיכל התמונה
+      document.querySelector('.image-container').appendChild(errorDiv);
+    }
+
+    // הסרת מחוון שגיאת תמונה
+    function clearImageError() {
+      const errorElement = document.querySelector('.image-error');
+      if (errorElement) {
+        errorElement.remove();
+      }
     }
   
     // בדיקת ניחוש
@@ -236,34 +253,13 @@ document.addEventListener('DOMContentLoaded', () => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            imageId: image.id,
+            imageId: image.title,
             guess,
             correct
           })
         });
       } catch (error) {
         console.error('Error logging guess:', error);
-      }
-    }
-    
-    // פונקציה חדשה: שליחת דיווח לשרת על תמונה שנכשלה
-    async function logImageError(image) {
-      try {
-        await fetch('/api/log-image-error', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            imageId: image.id,
-            imageUrl: image.imageUrl,
-            originalUrl: image.originalUrl || '',
-            title: image.title,
-            errorType: 'load_failure'
-          })
-        });
-      } catch (error) {
-        console.error('Error logging image failure:', error);
       }
     }
   
