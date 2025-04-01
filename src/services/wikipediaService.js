@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { humanKeywords, nonHumanKeywords } = require('../config/constants');
+const { humanKeywords, nonHumanKeywords, IMAGE_SETTINGS } = require('../config/constants');
 const ApiUtils = require('../utils/apiUtils');
 
 // יצירת מופע axios עמיד יותר לשגיאות רשת
@@ -141,10 +141,10 @@ class WikipediaService {
   /**
    * קבלת מידע על דפים כולל תמונות
    * @param {Array} pageIds - מערך של מזהי דפים
-   * @param {number} thumbnailSize - גודל התמונה המבוקש בפיקסלים
+   * @param {number} [thumbnailSize=300] - גודל התמונה המבוקש
    * @returns {Promise<Object>} - אובייקט עם מידע על הדפים
    */
-  async getPageInfo(pageIds, thumbnailSize = 300) {
+  async getPageInfo(pageIds, thumbnailSize = IMAGE_SETTINGS?.THUMBNAIL_SIZE || 300) {
     try {
       if (pageIds.length === 0) {
         return {};
@@ -163,7 +163,7 @@ class WikipediaService {
                 pageids: group.join('|'),
                 prop: 'images|info|pageimages',
                 inprop: 'url',
-                pithumbsize: thumbnailSize,
+                pithumbsize: thumbnailSize, // שימוש בפרמטר שהועבר
                 format: 'json'
               }
             });
