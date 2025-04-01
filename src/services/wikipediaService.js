@@ -15,11 +15,11 @@ const robustAxios = ApiUtils.createRobustAxios({
  */
 class WikipediaService {
   constructor() {
-    // מגביל את מספר הבקשות המקביל
-    this.concurrentRequestLimit = 2;
+    // מגביל את מספר הבקשות המקביל - הגדלה מ-2 ל-4
+    this.concurrentRequestLimit = 4;
     this.requestQueue = [];
     this.activeRequests = 0;
-    this.requestDelay = 1000; // השהייה של שנייה בין בקשות
+    this.requestDelay = 800; // השהייה בין בקשות - הקטנה מ-1000 ל-800 מילישניות
   }
 
   /**
@@ -85,7 +85,7 @@ class WikipediaService {
               action: 'query',
               list: 'categorymembers',
               cmtitle: categoryName,
-              cmlimit: 20, // הפחתת מספר התוצאות
+              cmlimit: 50, // הגדלה מ-20 ל-50
               cmnamespace: 0,
               format: 'json'
             }
@@ -118,7 +118,7 @@ class WikipediaService {
               list: 'search',
               srsearch: searchTerm,
               format: 'json',
-              srlimit: 5, // הפחתת מספר התוצאות
+              srlimit: 20, // הגדלה מ-5 ל-20
               srnamespace: 0
             }
           });
@@ -149,8 +149,8 @@ class WikipediaService {
         return {};
       }
 
-      // חלוקת המזהים לקבוצות קטנות יותר
-      const pageIdGroups = this.chunkArray(pageIds, 3);
+      // חלוקת המזהים לקבוצות קטנות יותר - הגדלה מ-3 ל-5 דפים בכל קבוצה
+      const pageIdGroups = this.chunkArray(pageIds, 5);
       let allPages = {};
 
       for (const group of pageIdGroups) {
@@ -234,7 +234,7 @@ class WikipediaService {
               exintro: true,
               explaintext: true,
               format: 'json',
-              pllimit: 20 // הפחתת מספר הקישורים
+              pllimit: 30 // הגדלה מ-20 ל-30
             }
           });
         }, 3, 2000);
@@ -295,7 +295,12 @@ class WikipediaService {
         
         // בדיקה אם קיימות קטגוריות או קישורים מובהקים לאנשים
         if (page.categories) {
-          const humanCategories = ['אישים', 'אנשים', 'ילידי', 'פוליטיקאים', 'שחקנים', 'זמרים'];
+          // הרחבת רשימת הקטגוריות לזיהוי
+          const humanCategories = [
+            'אישים', 'אנשים', 'ילידי', 'פוליטיקאים', 'שחקנים', 'זמרים', 'סופרים',
+            'אמנים', 'עיתונאים', 'רופאים', 'מדענים', 'מנהלים', 'חברי כנסת', 'שרים',
+            'שופטים', 'עורכי דין', 'מוזיקאים', 'במאים', 'מנהיגים', 'רבנים'
+          ];
           const categoryTitles = page.categories.map(cat => cat.title || '');
           
           for (const category of humanCategories) {
@@ -305,7 +310,7 @@ class WikipediaService {
           }
         }
         
-        // בדיקת טקסט הפתיחה לזיהוי מילות מפתח
+        // בדיקת טקסט הפתיחה לזיהוי מילות מפתח - הקלה בתנאים
         for (const keyword of humanKeywords) {
           if (extract.includes(keyword)) {
             return true;

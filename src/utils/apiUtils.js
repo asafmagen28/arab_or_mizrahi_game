@@ -90,15 +90,15 @@ class ApiUtils {
     const httpsAgent = new https.Agent({
       keepAlive: true,
       keepAliveMsecs: 3000,
-      maxSockets: 10, // מגביל את מספר החיבורים המקבילים
-      timeout: 10000, // תוספת timeout לחיבור עצמו
+      maxSockets: 20, // הגדלה מ-10 ל-20
+      timeout: 15000, // הגדלה מ-10000 ל-15000
       rejectUnauthorized: false // במקרה של בעיות SSL
     });
 
     return axios.create({
-      timeout: 15000, // timeout ארוך יותר לבקשות
-      maxContentLength: 10 * 1024 * 1024, // גודל תוכן מקסימלי
-      maxRedirects: 3, // פחות הפניות מקסימליות
+      timeout: 20000, // הגדלה מ-15000 ל-20000
+      maxContentLength: 20 * 1024 * 1024, // הגדלה מ-10 ל-20 מגה
+      maxRedirects: 5, // הגדלה מ-3 ל-5
       httpsAgent,
       headers: {
         'Accept-Encoding': 'gzip, deflate',
@@ -117,7 +117,7 @@ class ApiUtils {
    * @param {number} batchSize - גודל קבוצת עיבוד
    * @returns {Promise<Array>} - מערך תוצאות
    */
-  static async throttledMap(items, fn, delayMs = 1000, batchSize = 3) {
+  static async throttledMap(items, fn, delayMs = 1000, batchSize = 5) { // הגדלה מ-3 ל-5
     const results = [];
     
     // עיבוד בקבוצות
