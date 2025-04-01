@@ -1,6 +1,8 @@
 const wikipediaService = require('./wikipediaService');
 const dataService = require('./dataService');
 const ApiUtils = require('../utils/apiUtils');
+const { shuffleArray } = require('../utils/helpers');
+
 const { 
   arabicLastNames, 
   mizrahiLastNames, 
@@ -461,8 +463,8 @@ class ImageService {
     }
     
     // הרחבת מספר שמות המשפחה לחיפוש
-    const limitedArabic = arabicLastNames.slice(0, 15); // הגדלה מ-5 ל-15
-    const limitedMizrahi = mizrahiLastNames.slice(0, 15); // הגדלה מ-5 ל-15
+    const limitedArabic = shuffleArray(arabicLastNames).slice(0, 15);
+    const limitedMizrahi = shuffleArray(mizrahiLastNames).slice(0, 15);
     const limitedArabCategories = wikiCategories.arab.slice(0, 5); // הגדלה מ-2 ל-5
     const limitedMizrahiCategories = wikiCategories.mizrahi.slice(0, 5); // הגדלה מ-2 ל-5
     
@@ -561,13 +563,6 @@ class ImageService {
 
     // שמירת כל התמונות החדשות במאגר ההיסטורי לשימוש בעתיד
     const allNewImages = [...arabResults, ...mizrahiResults];
-    if (allNewImages.length > 0) {
-      try {
-        await dataService.updateHistoricalImages(allNewImages);
-      } catch (error) {
-        console.error('Error updating historical images:', error);
-      }
-    }
 
     // וידוא שיש לנו תמונות מכל קטגוריה
     if (arabResults.length === 0 || mizrahiResults.length === 0) {
@@ -588,6 +583,14 @@ class ImageService {
 
     // ערבוב התמונות
     this.todaysImages = [...randomArabic, ...randomMizrahi].sort(() => 0.5 - Math.random());
+
+    if (this.todaysImages > 0) {
+      try {
+        await dataService.updateHistoricalImages(this.todaysImages);
+      } catch (error) {
+        console.error('Error updating historical images:', error);
+      }
+    }
     
     // שמירת התמונות היומיות במאגר הקבוע
     try {
