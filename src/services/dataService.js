@@ -72,34 +72,25 @@ class DataService {
   async updateHistoricalImages(newImages) {
     try {
       if (!Array.isArray(this.historicalImages)) {
-        console.error('Historical images is not an array before update, initializing empty array');
         this.historicalImages = [];
       }
       
-      if (!Array.isArray(newImages)) {
-        console.error('New images is not an array:', newImages);
-        return;
-      }
-      
-      // הוספה למאגר ההיסטורי
+      // הוספה למאגר ההיסטורי רק של התמונות שנבחרו להצגה
       this.historicalImages = [...this.historicalImages, ...newImages];
       
       // וידוא שכל פריט במערך תקין
       this.historicalImages = this.historicalImages.filter(img => img && typeof img === 'object' && img.id);
       
-      // שמירת רק X התמונות האחרונות כדי למנוע קובץ גדול מדי
+      // שמירת רק X התמונות האחרונות
       if (this.historicalImages.length > MAX_HISTORY_SIZE) {
-        // שמירה על 20% מהמאגר הקודם באופן אקראי כדי לשמור על גיוון
         const oldImagesCount = Math.floor(MAX_HISTORY_SIZE * 0.2);
         const oldImages = this.historicalImages
           .slice(0, this.historicalImages.length - newImages.length)
           .sort(() => 0.5 - Math.random())
           .slice(0, oldImagesCount);
         
-        // שמירה על כל התמונות החדשות
         const recentImages = this.historicalImages.slice(this.historicalImages.length - newImages.length);
         
-        // מיזוג ההיסטורי עם החדש, עד גבול המאגר המקסימלי
         this.historicalImages = [...oldImages, ...recentImages].slice(0, MAX_HISTORY_SIZE);
       }
       
