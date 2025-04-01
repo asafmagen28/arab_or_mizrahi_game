@@ -115,6 +115,18 @@ const arabicLastNames = [
   const MAX_HISTORY_SIZE = 500; // הגדלה מ-150 ל-500
   const HISTORY_FILE_PATH = 'historical-images.json';
   
+  // הגדרות חדשות עבור תמונות
+  const IMAGE_SETTINGS = {
+    MIN_WIDTH: 150,          // רוחב מינימלי לתמונה
+    MIN_HEIGHT: 150,         // גובה מינימלי לתמונה
+    PREFERRED_MIN_WIDTH: 200, // רוחב מינימלי רצוי
+    PREFERRED_MIN_HEIGHT: 200, // גובה מינימלי רצוי
+    ASPECT_RATIO_MIN: 0.5,    // יחס מינימלי בין רוחב וגובה (גובה/רוחב)
+    ASPECT_RATIO_MAX: 2.0,    // יחס מקסימלי בין רוחב וגובה
+    THUMBNAIL_SIZE: 300,      // גודל הטאמבנייל המועדף בבקשות API
+    PREFERRED_REQUEST_SIZE: 400 // גודל תמונה מועדף בבקשות API
+  };
+  
   module.exports = {
     arabicLastNames,
     mizrahiLastNames,
@@ -125,5 +137,6 @@ const arabicLastNames = [
     faceKeywords,
     IMAGES_PER_CATEGORY,
     MAX_HISTORY_SIZE,
-    HISTORY_FILE_PATH
+    HISTORY_FILE_PATH,
+    IMAGE_SETTINGS
   };
