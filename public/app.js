@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
       arabTotal: 0,
       mizrahiCorrect: 0,
       mizrahiTotal: 0,
-      isProcessingGuess: false  // משתנה חדש שמצביע אם יש ניחוש בתהליך
+      isProcessingGuess: false,  // משתנה שמצביע אם יש ניחוש בתהליך
+      failedImageAttempts: 0     // מונה לניסיונות שנכשלו ברצף
     };
   
     // מרכיבי ממשק המשתמש
@@ -64,91 +65,150 @@ document.addEventListener('DOMContentLoaded', () => {
       gameState.arabTotal = 0;
       gameState.mizrahiCorrect = 0;
       gameState.mizrahiTotal = 0;
+      gameState.failedImageAttempts = 0;
       
       // עדכון ממשק
       updateScoreDisplay();
       loadCurrentImage();
     }
   
-  // טעינת התמונה הנוכחית
-  function loadCurrentImage() {
-    if (gameState.currentIndex >= gameState.images.length) {
-      endGame();
-      // איפוס מצב הכפתורים בסוף המשחק
-      gameState.isProcessingGuess = false;
-      elements.btnArab.disabled = false;
-      elements.btnMizrahi.disabled = false;
-      elements.btnArab.classList.remove('btn-disabled');
-      elements.btnMizrahi.classList.remove('btn-disabled');
-      return;
-    }
-    
-    const currentImage = gameState.images[gameState.currentIndex];
-    elements.currentImage.src = currentImage.imageUrl;
-    elements.sourceLink.href = currentImage.sourceUrl;
-    
-    // הסרת הסטטוס הקודם
-    elements.resultOverlay.classList.remove('show', 'correct', 'incorrect');
-  }
-  
-    // בדיקת ניחוש
-  function checkGuess(guess) {
-    // אם יש כבר ניחוש בעיבוד, נצא מהפונקציה
-    if (gameState.isProcessingGuess) {
-      return;
-    }
-    
-    // מציינים שהתחלנו לעבד ניחוש
-    gameState.isProcessingGuess = true;
-    
-    // השבתת הכפתורים חזותית ופונקציונלית
-    elements.btnArab.disabled = true;
-    elements.btnMizrahi.disabled = true;
-    elements.btnArab.classList.add('btn-disabled');
-    elements.btnMizrahi.classList.add('btn-disabled');
-    
-    const currentImage = gameState.images[gameState.currentIndex];
-    const correct = guess === currentImage.group;
-    
-    // עדכון סטטיסטיקה
-    gameState.totalAttempts++;
-    
-    if (correct) {
-      gameState.correctGuesses++;
+    // טעינת התמונה הנוכחית
+    function loadCurrentImage() {
+      if (gameState.currentIndex >= gameState.images.length) {
+        endGame();
+        // איפוס מצב הכפתורים בסוף המשחק
+        gameState.isProcessingGuess = false;
+        elements.btnArab.disabled = false;
+        elements.btnMizrahi.disabled = false;
+        elements.btnArab.classList.remove('btn-disabled');
+        elements.btnMizrahi.classList.remove('btn-disabled');
+        return;
+      }
       
-      if (currentImage.group === 'arab') {
-        gameState.arabCorrect++;
-      } else {
-        gameState.mizrahiCorrect++;
+      const currentImage = gameState.images[gameState.currentIndex];
+      
+      // בדיקה אם היו יותר מדי ניסיונות שנכשלו ברצף
+      if (gameState.failedImageAttempts > 5) {
+        // מציג הודעת שגיאה מתאימה
+        console.error('Too many failed image loads in a row, moving to end game');
+        gameState.failedImageAttempts = 0; // איפוס המונה
+        endGame();
+        return;
+      }
+
+      // הוספת מאזין "onerror" לטיפול בכישלון טעינת תמונה
+      elements.currentImage.onerror = function() {
+        console.error(`Failed to load image: ${currentImage.imageUrl}`);
+        gameState.failedImageAttempts++; // להגדיל את מונה הניסיונות שנכשלו
+        
+        // הצגת מחוון שגיאה
+        showImageError();
+        
+        // נסה לעבור לתמונה הבאה אחרי 1.5 שניות
+        setTimeout(() => {
+          gameState.currentIndex++;
+          loadCurrentImage();
+        }, 1500);
+      };
+
+      // הוספת מאזין "onload" לאיפוס מונה הניסיונות שנכשלו
+      elements.currentImage.onload = function() {
+        // איפוס מונה הניסיונות שנכשלו כאשר תמונה נטענת בהצלחה
+        gameState.failedImageAttempts = 0;
+        
+        // הסרת מחוון שגיאה אם קיים
+        clearImageError();
+      };
+      
+      elements.currentImage.src = currentImage.imageUrl;
+      elements.sourceLink.href = currentImage.sourceUrl;
+      
+      // הסרת הסטטוס הקודם
+      elements.resultOverlay.classList.remove('show', 'correct', 'incorrect');
+    }
+
+    // הצגת שגיאת טעינת תמונה
+    function showImageError() {
+      // בדיקה אם כבר קיים אלמנט שגיאה
+      if (document.querySelector('.image-error')) {
+        return;
+      }
+      
+      // יצירת אלמנט שגיאה
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'image-error';
+      errorDiv.innerHTML = '<div>שגיאה בטעינת התמונה</div><div>עובר לתמונה הבאה...</div>';
+      
+      // הוספת האלמנט למיכל התמונה
+      document.querySelector('.image-container').appendChild(errorDiv);
+    }
+
+    // הסרת מחוון שגיאת תמונה
+    function clearImageError() {
+      const errorElement = document.querySelector('.image-error');
+      if (errorElement) {
+        errorElement.remove();
       }
     }
-    
-    if (currentImage.group === 'arab') {
-      gameState.arabTotal++;
-    } else {
-      gameState.mizrahiTotal++;
-    }
-    
-    // עדכון ממשק
-    showResultOverlay(correct);
-    updateScoreDisplay();
-    
-    // שליחת הניחוש לשרת
-    logGuessToServer(currentImage, guess, correct);
-    
-    // מעבר לתמונה הבאה אחרי השהייה קצרה
-    setTimeout(() => {
-      gameState.currentIndex++;
-      loadCurrentImage();
+  
+    // בדיקת ניחוש
+    function checkGuess(guess) {
+      // אם יש כבר ניחוש בעיבוד, נצא מהפונקציה
+      if (gameState.isProcessingGuess) {
+        return;
+      }
       
-      // מאפשרים ניחושים חדשים ומסירים את ההשבתה מהכפתורים
-      gameState.isProcessingGuess = false;
-      elements.btnArab.disabled = false;
-      elements.btnMizrahi.disabled = false;
-      elements.btnArab.classList.remove('btn-disabled');
-      elements.btnMizrahi.classList.remove('btn-disabled');
-    }, 1500);
-  }
+      // מציינים שהתחלנו לעבד ניחוש
+      gameState.isProcessingGuess = true;
+      
+      // השבתת הכפתורים חזותית ופונקציונלית
+      elements.btnArab.disabled = true;
+      elements.btnMizrahi.disabled = true;
+      elements.btnArab.classList.add('btn-disabled');
+      elements.btnMizrahi.classList.add('btn-disabled');
+      
+      const currentImage = gameState.images[gameState.currentIndex];
+      const correct = guess === currentImage.group;
+      
+      // עדכון סטטיסטיקה
+      gameState.totalAttempts++;
+      
+      if (correct) {
+        gameState.correctGuesses++;
+        
+        if (currentImage.group === 'arab') {
+          gameState.arabCorrect++;
+        } else {
+          gameState.mizrahiCorrect++;
+        }
+      }
+      
+      if (currentImage.group === 'arab') {
+        gameState.arabTotal++;
+      } else {
+        gameState.mizrahiTotal++;
+      }
+      
+      // עדכון ממשק
+      showResultOverlay(correct);
+      updateScoreDisplay();
+      
+      // שליחת הניחוש לשרת
+      logGuessToServer(currentImage, guess, correct);
+      
+      // מעבר לתמונה הבאה אחרי השהייה קצרה
+      setTimeout(() => {
+        gameState.currentIndex++;
+        loadCurrentImage();
+        
+        // מאפשרים ניחושים חדשים ומסירים את ההשבתה מהכפתורים
+        gameState.isProcessingGuess = false;
+        elements.btnArab.disabled = false;
+        elements.btnMizrahi.disabled = false;
+        elements.btnArab.classList.remove('btn-disabled');
+        elements.btnMizrahi.classList.remove('btn-disabled');
+      }, 1500);
+    }
   
     // הצגת תוצאת ניחוש
     function showResultOverlay(correct) {
