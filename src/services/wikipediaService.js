@@ -141,9 +141,10 @@ class WikipediaService {
   /**
    * קבלת מידע על דפים כולל תמונות
    * @param {Array} pageIds - מערך של מזהי דפים
+   * @param {number} thumbnailSize - גודל התמונה המבוקש בפיקסלים
    * @returns {Promise<Object>} - אובייקט עם מידע על הדפים
    */
-  async getPageInfo(pageIds) {
+  async getPageInfo(pageIds, thumbnailSize = 300) {
     try {
       if (pageIds.length === 0) {
         return {};
@@ -162,7 +163,7 @@ class WikipediaService {
                 pageids: group.join('|'),
                 prop: 'images|info|pageimages',
                 inprop: 'url',
-                pithumbsize: 300,
+                pithumbsize: thumbnailSize,
                 format: 'json'
               }
             });
