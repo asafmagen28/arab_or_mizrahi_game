@@ -43,8 +43,8 @@ class ImageService {
       
       if (match) {
         const size = parseInt(match[1]);
-        // תמונות קטנות מדי לרוב אינן תמונות פנים טובות
-        if (size < 100) {
+        // תמונות קטנות מדי לרוב אינן תמונות פנים טובות - הקטנת הסף מ-100 ל-80
+        if (size < 80) {
           console.log(`Rejected small image (${size}px): ${imageUrl}`);
           return false;
         }
@@ -87,7 +87,7 @@ class ImageService {
         }
       }
       
-      // אם אין לנו מספיק מידע מהשם, נחזיר true כברירת מחדל
+      // אם אין לנו מספיק מידע מהשם, נחזיר true כברירת מחדל - יותר מקל
       console.log(`No clear indicators for image, defaulting to accept: ${imageUrl}`);
       return true;
     } catch (error) {
@@ -130,8 +130,8 @@ class ImageService {
           if (isHuman) {
             humanPageIds.push(pageId);
           }
-          // השהייה קצרה בין בדיקות
-          await ApiUtils.sleep(300);
+          // השהייה קצרה בין בדיקות - מקוצר ל-200 מילישניות
+          await ApiUtils.sleep(200);
         } catch (error) {
           console.error(`Error checking if page ${pageId} is human:`, error.message);
         }
@@ -189,13 +189,19 @@ class ImageService {
             id: `${page.title}_${pageId}` // מזהה ייחודי לתמונה
           };
           
-          // בדיקה אם התמונה כבר הופיעה בהיסטוריה
-          const existsInHistory = dataService.imageExistsInHistory(imageObject.id);
-          
-          if (!existsInHistory) {
+          try {
+            // בדיקה אם התמונה כבר הופיעה בהיסטוריה
+            const existsInHistory = dataService.imageExistsInHistory(imageObject.id);
+            
+            if (!existsInHistory) {
+              results.push(imageObject);
+            } else {
+              console.log(`Image ${imageObject.id} already in history, skipping`);
+            }
+          } catch (err) {
+            console.error('Error checking history:', err);
+            // במקרה של שגיאה, נוסיף את התמונה בכל מקרה
             results.push(imageObject);
-          } else {
-            console.log(`Image ${imageObject.id} already in history, skipping`);
           }
           
           continue;
@@ -253,13 +259,19 @@ class ImageService {
               id: `${page.title}_${pageId}` // מזהה ייחודי לתמונה
             };
             
-            // בדיקה אם התמונה כבר הופיעה בהיסטוריה
-            const existsInHistory = dataService.imageExistsInHistory(imageObject.id);
-            
-            if (!existsInHistory) {
+            try {
+              // בדיקה אם התמונה כבר הופיעה בהיסטוריה
+              const existsInHistory = dataService.imageExistsInHistory(imageObject.id);
+              
+              if (!existsInHistory) {
+                results.push(imageObject);
+              } else {
+                console.log(`Image ${imageObject.id} already in history, skipping`);
+              }
+            } catch (err) {
+              console.error('Error checking history for image from list:', err);
+              // במקרה של שגיאה, נוסיף את התמונה בכל מקרה
               results.push(imageObject);
-            } else {
-              console.log(`Image ${imageObject.id} already in history, skipping`);
             }
           } catch (error) {
             console.error(`Error getting image for ${page.title}:`, error.message);
@@ -284,34 +296,45 @@ class ImageService {
   async generateDailyImages() {
     console.log('Generating daily images...');
     
+    // וידוא שמאגר נטען כראוי
+    const existingImages = dataService.loadHistoricalImages();
+    
     // שימוש במאגר היסטורי אם יש מספיק תמונות
-    const existingImages = await dataService.loadHistoricalImages();
-    if (existingImages && existingImages.length >= IMAGES_PER_CATEGORY * 2) {
-      console.log(`Using ${IMAGES_PER_CATEGORY * 2} images from historical cache`);
-      const randomArabic = existingImages
-        .filter(img => img.group === 'arab')
-        .sort(() => 0.5 - Math.random())
-        .slice(0, IMAGES_PER_CATEGORY);
-        
-      const randomMizrahi = existingImages
-        .filter(img => img.group === 'mizrahi')
-        .sort(() => 0.5 - Math.random())
-        .slice(0, IMAGES_PER_CATEGORY);
-        
-      this.todaysImages = [...randomArabic, ...randomMizrahi].sort(() => 0.5 - Math.random());
+    if (Array.isArray(existingImages) && existingImages.length >= IMAGES_PER_CATEGORY * 2) {
+      console.log(`Using ${existingImages.length} images from historical cache`);
       
-      // שמירת התמונות במאגר הקבוע
-      await dataService.saveDailyImages(this.todaysImages);
+      // סינון לפי קבוצה ויצירת עותק של המערך למניעת שינויים במקור
+      const arabImages = [...existingImages.filter(img => img && img.group === 'arab')];
+      const mizrahiImages = [...existingImages.filter(img => img && img.group === 'mizrahi')];
       
-      console.log(`Generated ${this.todaysImages.length} daily images from cache`);
-      return this.todaysImages;
+      console.log(`Found ${arabImages.length} arab images and ${mizrahiImages.length} mizrahi images in cache`);
+      
+      // רק אם יש מספיק תמונות לכל קבוצה, משתמשים במטמון
+      if (arabImages.length >= IMAGES_PER_CATEGORY && mizrahiImages.length >= IMAGES_PER_CATEGORY) {
+        // ערבוב התמונות בכל קבוצה
+        const randomArabic = arabImages.sort(() => 0.5 - Math.random()).slice(0, IMAGES_PER_CATEGORY);
+        const randomMizrahi = mizrahiImages.sort(() => 0.5 - Math.random()).slice(0, IMAGES_PER_CATEGORY);
+          
+        // ערבוב כללי של התמונות הנבחרות
+        this.todaysImages = [...randomArabic, ...randomMizrahi].sort(() => 0.5 - Math.random());
+        
+        // שמירת התמונות במאגר הקבוע
+        await dataService.saveDailyImages(this.todaysImages);
+        
+        console.log(`Generated ${this.todaysImages.length} daily images from cache`);
+        return this.todaysImages;
+      } else {
+        console.log('Not enough images in each category in cache, fetching new images');
+      }
+    } else {
+      console.log('Not enough images in cache, fetching new images');
     }
     
-    // הגבלת מספר שמות המשפחה לחיפוש כדי להפחית את העומס
-    const limitedArabic = arabicLastNames.slice(0, 5);
-    const limitedMizrahi = mizrahiLastNames.slice(0, 5);
-    const limitedArabCategories = wikiCategories.arab.slice(0, 2);
-    const limitedMizrahiCategories = wikiCategories.mizrahi.slice(0, 2);
+    // הרחבת מספר שמות המשפחה לחיפוש
+    const limitedArabic = arabicLastNames.slice(0, 15); // הגדלה מ-5 ל-15
+    const limitedMizrahi = mizrahiLastNames.slice(0, 15); // הגדלה מ-5 ל-15
+    const limitedArabCategories = wikiCategories.arab.slice(0, 5); // הגדלה מ-2 ל-5
+    const limitedMizrahiCategories = wikiCategories.mizrahi.slice(0, 5); // הגדלה מ-2 ל-5
     
     // שליחת הבקשות באופן סדרתי כדי להפחית את העומס
     const arabResults = [];
@@ -322,17 +345,17 @@ class ImageService {
     for (const lastName of limitedArabic) {
       try {
         const results = await this.fetchImagesFromWikipedia(lastName);
-        if (results.length > 0) {
+        if (results && results.length > 0) {
           console.log(`Found ${results.length} images for ${lastName}`);
           arabResults.push(...results);
           
-          // אם יש כבר מספיק תמונות, לא צריך להמשיך
-          if (arabResults.length >= IMAGES_PER_CATEGORY * 2) {
+          // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+          if (arabResults.length >= IMAGES_PER_CATEGORY * 3) {
             break;
           }
         }
-        // המתנה קצרה בין בקשות
-        await ApiUtils.sleep(1000);
+        // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+        await ApiUtils.sleep(500);
       } catch (error) {
         console.error(`Error fetching images for ${lastName}:`, error.message);
       }
@@ -343,61 +366,61 @@ class ImageService {
     for (const lastName of limitedMizrahi) {
       try {
         const results = await this.fetchImagesFromWikipedia(lastName);
-        if (results.length > 0) {
+        if (results && results.length > 0) {
           console.log(`Found ${results.length} images for ${lastName}`);
           mizrahiResults.push(...results);
           
-          // אם יש כבר מספיק תמונות, לא צריך להמשיך
-          if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 2) {
+          // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+          if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 3) {
             break;
           }
         }
-        // המתנה קצרה בין בקשות
-        await ApiUtils.sleep(1000);
+        // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+        await ApiUtils.sleep(500);
       } catch (error) {
         console.error(`Error fetching images for ${lastName}:`, error.message);
       }
     }
     
-    // רק אם אין מספיק תמונות, נחפש גם בקטגוריות
-    if (arabResults.length < IMAGES_PER_CATEGORY) {
+    // אם אין מספיק תמונות, נחפש גם בקטגוריות - יותר מקיף
+    if (arabResults.length < IMAGES_PER_CATEGORY * 1.5) {
       console.log('Not enough Arab images, fetching categories...');
       for (const category of limitedArabCategories) {
         try {
           const results = await this.fetchImagesFromWikipedia(category, true);
-          if (results.length > 0) {
+          if (results && results.length > 0) {
             console.log(`Found ${results.length} images for category ${category}`);
             arabResults.push(...results);
             
-            // אם יש כבר מספיק תמונות, לא צריך להמשיך
-            if (arabResults.length >= IMAGES_PER_CATEGORY * 2) {
+            // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+            if (arabResults.length >= IMAGES_PER_CATEGORY * 3) {
               break;
             }
           }
-          // המתנה קצרה בין בקשות
-          await ApiUtils.sleep(1000);
+          // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+          await ApiUtils.sleep(500);
         } catch (error) {
           console.error(`Error fetching images for category ${category}:`, error.message);
         }
       }
     }
     
-    if (mizrahiResults.length < IMAGES_PER_CATEGORY) {
+    if (mizrahiResults.length < IMAGES_PER_CATEGORY * 1.5) {
       console.log('Not enough Mizrahi images, fetching categories...');
       for (const category of limitedMizrahiCategories) {
         try {
           const results = await this.fetchImagesFromWikipedia(category, true);
-          if (results.length > 0) {
+          if (results && results.length > 0) {
             console.log(`Found ${results.length} images for category ${category}`);
             mizrahiResults.push(...results);
             
-            // אם יש כבר מספיק תמונות, לא צריך להמשיך
-            if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 2) {
+            // אם יש כבר הרבה יותר תמונות מהמינימום, לא צריך להמשיך
+            if (mizrahiResults.length >= IMAGES_PER_CATEGORY * 3) {
               break;
             }
           }
-          // המתנה קצרה בין בקשות
-          await ApiUtils.sleep(1000);
+          // המתנה קצרה בין בקשות - מקוצר כדי להאיץ
+          await ApiUtils.sleep(500);
         } catch (error) {
           console.error(`Error fetching images for category ${category}:`, error.message);
         }
@@ -406,25 +429,44 @@ class ImageService {
     
     console.log(`Found ${arabResults.length} Arab images and ${mizrahiResults.length} Mizrahi images`);
 
-    // בחירת תמונות רנדומליות
-    const randomArabic = arabResults.sort(() => 0.5 - Math.random()).slice(0, Math.min(arabResults.length, IMAGES_PER_CATEGORY));
-    const randomMizrahi = mizrahiResults.sort(() => 0.5 - Math.random()).slice(0, Math.min(mizrahiResults.length, IMAGES_PER_CATEGORY));
+    // שמירת כל התמונות החדשות במאגר ההיסטורי לשימוש בעתיד
+    const allNewImages = [...arabResults, ...mizrahiResults];
+    if (allNewImages.length > 0) {
+      try {
+        await dataService.updateHistoricalImages(allNewImages);
+      } catch (error) {
+        console.error('Error updating historical images:', error);
+      }
+    }
+
+    // וידוא שיש לנו תמונות מכל קטגוריה
+    if (arabResults.length === 0 || mizrahiResults.length === 0) {
+      console.log('Missing images from one or more categories, using sample images...');
+      this.todaysImages = this.getSampleImages();
+      await dataService.saveDailyImages(this.todaysImages);
+      return this.todaysImages;
+    }
+
+    // בחירת תמונות רנדומליות - תמיד עד 10 (לפי קבוע IMAGES_PER_CATEGORY)
+    const randomArabic = arabResults
+      .sort(() => 0.5 - Math.random())
+      .slice(0, Math.min(arabResults.length, IMAGES_PER_CATEGORY));
+      
+    const randomMizrahi = mizrahiResults
+      .sort(() => 0.5 - Math.random())
+      .slice(0, Math.min(mizrahiResults.length, IMAGES_PER_CATEGORY));
 
     // ערבוב התמונות
     this.todaysImages = [...randomArabic, ...randomMizrahi].sort(() => 0.5 - Math.random());
     
-    if (this.todaysImages.length > 0) {
-      // עדכון המאגר ההיסטורי רק אם הצלחנו להשיג תמונות
-      await dataService.updateHistoricalImages(this.todaysImages);
-      
-      // שמירת התמונות במאגר הקבוע
+    // שמירת התמונות היומיות במאגר הקבוע
+    try {
       await dataService.saveDailyImages(this.todaysImages);
-  
       console.log(`Generated ${this.todaysImages.length} daily images`);
-    } else {
-      console.log('Failed to get any images. Using backup sample images...');
+    } catch (error) {
+      console.error('Error saving daily images:', error);
       
-      // במקרה שלא הצלחנו להשיג תמונות בכלל, נשתמש בכמה דוגמאות קבועות
+      // במקרה של שגיאה, נשתמש בדוגמאות קבועות
       this.todaysImages = this.getSampleImages();
       await dataService.saveDailyImages(this.todaysImages);
     }
@@ -437,6 +479,32 @@ class ImageService {
    * @returns {Array} - מערך של תמונות יומיות
    */
   getDailyImages() {
+    // אם אין תמונות בזיכרון, ננסה לטעון מהקובץ
+    if (!this.todaysImages || this.todaysImages.length === 0) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const dailyImagesPath = path.join(__dirname, '../../public/daily-images.json');
+        
+        if (fs.existsSync(dailyImagesPath)) {
+          const dailyImagesData = fs.readFileSync(dailyImagesPath, 'utf8');
+          const dailyImages = JSON.parse(dailyImagesData);
+          
+          if (dailyImages && dailyImages.images && dailyImages.images.length > 0) {
+            this.todaysImages = dailyImages.images;
+            console.log(`Loaded ${this.todaysImages.length} images from daily-images.json`);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading daily images from file:', error);
+      }
+      
+      // אם עדיין אין תמונות, נשתמש בדוגמאות קבועות
+      if (!this.todaysImages || this.todaysImages.length === 0) {
+        this.todaysImages = this.getSampleImages();
+      }
+    }
+    
     return this.todaysImages;
   }
 

@@ -19,18 +19,37 @@ class DataService {
 
   /**
    * טעינת המאגר ההיסטורי
+   * @returns {Array} - מערך של תמונות היסטוריות
    */
   loadHistoricalImages() {
     try {
       if (fs.existsSync(this.historyFilePath)) {
         const historyData = fs.readFileSync(this.historyFilePath, 'utf8');
-        this.historicalImages = JSON.parse(historyData);
-        console.log(`Loaded ${this.historicalImages.length} historical images`);
+        try {
+          const histImages = JSON.parse(historyData);
+          if (Array.isArray(histImages)) {
+            this.historicalImages = histImages;
+            console.log(`Loaded ${this.historicalImages.length} historical images`);
+            return this.historicalImages;
+          } else {
+            console.error('Historical images data is not an array, initializing empty array');
+            this.historicalImages = [];
+          }
+        } catch (parseError) {
+          console.error('Error parsing historical images JSON:', parseError);
+          this.historicalImages = [];
+        }
+      } else {
+        console.log('Historical images file does not exist, initializing empty array');
+        this.historicalImages = [];
+        // יצירת קובץ ריק אם לא קיים
+        fs.writeFileSync(this.historyFilePath, '[]');
       }
     } catch (error) {
       console.error('Error loading historical images:', error);
       this.historicalImages = [];
     }
+    return this.historicalImages;
   }
 
   /**
@@ -39,7 +58,11 @@ class DataService {
    * @returns {boolean} - האם התמונה קיימת במאגר
    */
   imageExistsInHistory(imageId) {
-    return this.historicalImages.some(img => img.id === imageId);
+    if (!Array.isArray(this.historicalImages)) {
+      console.error('Historical images is not an array:', this.historicalImages);
+      return false;
+    }
+    return this.historicalImages.some(img => img && img.id === imageId);
   }
 
   /**
@@ -48,19 +71,41 @@ class DataService {
    */
   async updateHistoricalImages(newImages) {
     try {
+      if (!Array.isArray(this.historicalImages)) {
+        console.error('Historical images is not an array before update, initializing empty array');
+        this.historicalImages = [];
+      }
+      
+      if (!Array.isArray(newImages)) {
+        console.error('New images is not an array:', newImages);
+        return;
+      }
+      
       // הוספה למאגר ההיסטורי
       this.historicalImages = [...this.historicalImages, ...newImages];
       
+      // וידוא שכל פריט במערך תקין
+      this.historicalImages = this.historicalImages.filter(img => img && typeof img === 'object' && img.id);
+      
       // שמירת רק X התמונות האחרונות כדי למנוע קובץ גדול מדי
       if (this.historicalImages.length > MAX_HISTORY_SIZE) {
-        this.historicalImages = this.historicalImages.slice(this.historicalImages.length - MAX_HISTORY_SIZE);
+        // שמירה על 20% מהמאגר הקודם באופן אקראי כדי לשמור על גיוון
+        const oldImagesCount = Math.floor(MAX_HISTORY_SIZE * 0.2);
+        const oldImages = this.historicalImages
+          .slice(0, this.historicalImages.length - newImages.length)
+          .sort(() => 0.5 - Math.random())
+          .slice(0, oldImagesCount);
+        
+        // שמירה על כל התמונות החדשות
+        const recentImages = this.historicalImages.slice(this.historicalImages.length - newImages.length);
+        
+        // מיזוג ההיסטורי עם החדש, עד גבול המאגר המקסימלי
+        this.historicalImages = [...oldImages, ...recentImages].slice(0, MAX_HISTORY_SIZE);
       }
       
       // שמירת המאגר ההיסטורי
-      await fs.promises.writeFile(
-        this.historyFilePath,
-        JSON.stringify(this.historicalImages)
-      );
+      const historyJson = JSON.stringify(this.historicalImages);
+      fs.writeFileSync(this.historyFilePath, historyJson);
       
       console.log(`Updated historical images (${this.historicalImages.length} total)`);
     } catch (error) {
@@ -78,17 +123,16 @@ class DataService {
       
       // וידוא שתיקיית public קיימת
       if (!fs.existsSync(publicDir)) {
-        await fs.promises.mkdir(publicDir, { recursive: true });
+        fs.mkdirSync(publicDir, { recursive: true });
       }
       
       // שמירת התמונות בקובץ JSON
-      await fs.promises.writeFile(
-        path.join(publicDir, 'daily-images.json'),
-        JSON.stringify({ 
-          date: new Date().toISOString().split('T')[0],
-          images: images
-        })
-      );
+      const dailyImagesData = JSON.stringify({ 
+        date: new Date().toISOString().split('T')[0],
+        images: images
+      });
+      
+      fs.writeFileSync(path.join(publicDir, 'daily-images.json'), dailyImagesData);
       
       console.log(`Saved ${images.length} daily images to file`);
     } catch (error) {
@@ -110,15 +154,12 @@ class DataService {
       
       // וידוא שתיקיית logs קיימת
       if (!fs.existsSync(logDir)) {
-        await fs.promises.mkdir(logDir, { recursive: true });
+        fs.mkdirSync(logDir, { recursive: true });
       }
       
       // הוספת הניחוש לקובץ לוג
       const logEntry = `${new Date().toISOString()},${guessData.imageId},${guessData.guess},${guessData.correct}\n`;
-      await fs.promises.appendFile(
-        path.join(logDir, 'guesses.log'),
-        logEntry
-      );
+      fs.appendFileSync(path.join(logDir, 'guesses.log'), logEntry);
     } catch (error) {
       console.error('Error logging guess:', error);
     }

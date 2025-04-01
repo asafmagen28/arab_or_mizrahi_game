@@ -6,6 +6,12 @@ body {
     padding: 0;
     direction: rtl;
   }
+
+  .btn-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
   
   .container {
     max-width: 800px;
