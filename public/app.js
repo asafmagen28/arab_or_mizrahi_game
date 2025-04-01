@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
       arabTotal: 0,
       mizrahiCorrect: 0,
       mizrahiTotal: 0,
-      isProcessingGuess: false  // משתנה חדש שמצביע אם יש ניחוש בתהליך
+      isProcessingGuess: false,  // משתנה שמצביע אם יש ניחוש בתהליך
+      failedImages: [] // מערך לשמירת מזהי תמונות שנכשלו בטעינה
     };
   
     // מרכיבי ממשק המשתמש
@@ -30,7 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
       playAgain: document.getElementById('play-again'),
       successRate: document.getElementById('success-rate'),
       arabSuccessRate: document.getElementById('arab-success-rate'),
-      mizrahiSuccessRate: document.getElementById('mizrahi-success-rate')
+      mizrahiSuccessRate: document.getElementById('mizrahi-success-rate'),
+      imageLoader: document.getElementById('image-loader') // אלמנט חדש למצב טעינה של תמונה
     };
   
     // טעינת תמונות היום מהשרת
@@ -64,91 +66,132 @@ document.addEventListener('DOMContentLoaded', () => {
       gameState.arabTotal = 0;
       gameState.mizrahiCorrect = 0;
       gameState.mizrahiTotal = 0;
+      gameState.failedImages = [];
       
       // עדכון ממשק
       updateScoreDisplay();
       loadCurrentImage();
     }
   
-  // טעינת התמונה הנוכחית
-  function loadCurrentImage() {
-    if (gameState.currentIndex >= gameState.images.length) {
-      endGame();
-      // איפוס מצב הכפתורים בסוף המשחק
-      gameState.isProcessingGuess = false;
-      elements.btnArab.disabled = false;
-      elements.btnMizrahi.disabled = false;
-      elements.btnArab.classList.remove('btn-disabled');
-      elements.btnMizrahi.classList.remove('btn-disabled');
-      return;
+    // טעינת התמונה הנוכחית
+    function loadCurrentImage() {
+      if (gameState.currentIndex >= gameState.images.length) {
+        endGame();
+        // איפוס מצב הכפתורים בסוף המשחק
+        gameState.isProcessingGuess = false;
+        elements.btnArab.disabled = false;
+        elements.btnMizrahi.disabled = false;
+        elements.btnArab.classList.remove('btn-disabled');
+        elements.btnMizrahi.classList.remove('btn-disabled');
+        return;
+      }
+      
+      const currentImage = gameState.images[gameState.currentIndex];
+      
+      // בדיקה אם התמונה הזו כבר נכשלה בעבר
+      if (gameState.failedImages.includes(currentImage.id)) {
+        console.log(`Skipping previously failed image: ${currentImage.id}`);
+        gameState.currentIndex++;
+        loadCurrentImage();
+        return;
+      }
+      
+      // הצגת מצב טעינה
+      if (elements.imageLoader) {
+        elements.imageLoader.style.display = 'flex';
+      }
+      
+      // הוספת מאזין לטעינה מוצלחת
+      elements.currentImage.onload = function() {
+        // הסתרת מצב טעינה
+        if (elements.imageLoader) {
+          elements.imageLoader.style.display = 'none';
+        }
+      };
+      
+      // הוספת מאזין לשגיאת טעינה
+      elements.currentImage.onerror = function() {
+        console.error(`Failed to load image: ${currentImage.imageUrl}`);
+        
+        // תיעוד התמונה שנכשלה
+        gameState.failedImages.push(currentImage.id);
+        
+        // שליחת מידע על התמונה שנכשלה לשרת
+        logImageError(currentImage).catch(err => 
+          console.error('Error logging image failure:', err)
+        );
+        
+        // מעבר אוטומטי לתמונה הבאה
+        gameState.currentIndex++;
+        loadCurrentImage();
+      };
+      
+      // התחלת טעינת התמונה
+      elements.currentImage.src = currentImage.imageUrl;
+      elements.sourceLink.href = currentImage.sourceUrl;
+      
+      // הסרת הסטטוס הקודם
+      elements.resultOverlay.classList.remove('show', 'correct', 'incorrect');
     }
-    
-    const currentImage = gameState.images[gameState.currentIndex];
-    elements.currentImage.src = currentImage.imageUrl;
-    elements.sourceLink.href = currentImage.sourceUrl;
-    
-    // הסרת הסטטוס הקודם
-    elements.resultOverlay.classList.remove('show', 'correct', 'incorrect');
-  }
   
     // בדיקת ניחוש
-  function checkGuess(guess) {
-    // אם יש כבר ניחוש בעיבוד, נצא מהפונקציה
-    if (gameState.isProcessingGuess) {
-      return;
-    }
-    
-    // מציינים שהתחלנו לעבד ניחוש
-    gameState.isProcessingGuess = true;
-    
-    // השבתת הכפתורים חזותית ופונקציונלית
-    elements.btnArab.disabled = true;
-    elements.btnMizrahi.disabled = true;
-    elements.btnArab.classList.add('btn-disabled');
-    elements.btnMizrahi.classList.add('btn-disabled');
-    
-    const currentImage = gameState.images[gameState.currentIndex];
-    const correct = guess === currentImage.group;
-    
-    // עדכון סטטיסטיקה
-    gameState.totalAttempts++;
-    
-    if (correct) {
-      gameState.correctGuesses++;
+    function checkGuess(guess) {
+      // אם יש כבר ניחוש בעיבוד, נצא מהפונקציה
+      if (gameState.isProcessingGuess) {
+        return;
+      }
+      
+      // מציינים שהתחלנו לעבד ניחוש
+      gameState.isProcessingGuess = true;
+      
+      // השבתת הכפתורים חזותית ופונקציונלית
+      elements.btnArab.disabled = true;
+      elements.btnMizrahi.disabled = true;
+      elements.btnArab.classList.add('btn-disabled');
+      elements.btnMizrahi.classList.add('btn-disabled');
+      
+      const currentImage = gameState.images[gameState.currentIndex];
+      const correct = guess === currentImage.group;
+      
+      // עדכון סטטיסטיקה
+      gameState.totalAttempts++;
+      
+      if (correct) {
+        gameState.correctGuesses++;
+        
+        if (currentImage.group === 'arab') {
+          gameState.arabCorrect++;
+        } else {
+          gameState.mizrahiCorrect++;
+        }
+      }
       
       if (currentImage.group === 'arab') {
-        gameState.arabCorrect++;
+        gameState.arabTotal++;
       } else {
-        gameState.mizrahiCorrect++;
+        gameState.mizrahiTotal++;
       }
-    }
-    
-    if (currentImage.group === 'arab') {
-      gameState.arabTotal++;
-    } else {
-      gameState.mizrahiTotal++;
-    }
-    
-    // עדכון ממשק
-    showResultOverlay(correct);
-    updateScoreDisplay();
-    
-    // שליחת הניחוש לשרת
-    logGuessToServer(currentImage, guess, correct);
-    
-    // מעבר לתמונה הבאה אחרי השהייה קצרה
-    setTimeout(() => {
-      gameState.currentIndex++;
-      loadCurrentImage();
       
-      // מאפשרים ניחושים חדשים ומסירים את ההשבתה מהכפתורים
-      gameState.isProcessingGuess = false;
-      elements.btnArab.disabled = false;
-      elements.btnMizrahi.disabled = false;
-      elements.btnArab.classList.remove('btn-disabled');
-      elements.btnMizrahi.classList.remove('btn-disabled');
-    }, 1500);
-  }
+      // עדכון ממשק
+      showResultOverlay(correct);
+      updateScoreDisplay();
+      
+      // שליחת הניחוש לשרת
+      logGuessToServer(currentImage, guess, correct);
+      
+      // מעבר לתמונה הבאה אחרי השהייה קצרה
+      setTimeout(() => {
+        gameState.currentIndex++;
+        loadCurrentImage();
+        
+        // מאפשרים ניחושים חדשים ומסירים את ההשבתה מהכפתורים
+        gameState.isProcessingGuess = false;
+        elements.btnArab.disabled = false;
+        elements.btnMizrahi.disabled = false;
+        elements.btnArab.classList.remove('btn-disabled');
+        elements.btnMizrahi.classList.remove('btn-disabled');
+      }, 1500);
+    }
   
     // הצגת תוצאת ניחוש
     function showResultOverlay(correct) {
@@ -193,13 +236,34 @@ document.addEventListener('DOMContentLoaded', () => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            imageId: image.title,
+            imageId: image.id,
             guess,
             correct
           })
         });
       } catch (error) {
         console.error('Error logging guess:', error);
+      }
+    }
+    
+    // פונקציה חדשה: שליחת דיווח לשרת על תמונה שנכשלה
+    async function logImageError(image) {
+      try {
+        await fetch('/api/log-image-error', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            imageId: image.id,
+            imageUrl: image.imageUrl,
+            originalUrl: image.originalUrl || '',
+            title: image.title,
+            errorType: 'load_failure'
+          })
+        });
+      } catch (error) {
+        console.error('Error logging image failure:', error);
       }
     }
   
