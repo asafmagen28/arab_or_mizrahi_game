@@ -7,7 +7,8 @@ const {
   wikiCategories, 
   nonFaceKeywords, 
   faceKeywords,
-  IMAGES_PER_CATEGORY 
+  IMAGES_PER_CATEGORY,
+  IMAGE_SETTINGS
 } = require('../config/constants');
 
 /**
@@ -20,12 +21,115 @@ class ImageService {
   }
 
   /**
+   * פונקציה חדשה לבדיקת רזולוציה ואיכות תמונה
+   * @param {string} imageUrl - כתובת URL של התמונה
+   * @returns {Promise<{isValid: boolean, width: number, height: number, message: string}>} 
+   * - תוצאת הבדיקה עם מידע על הרזולוציה והסיבה לדחייה (אם קיימת)
+   */
+  async checkImageResolution(imageUrl) {
+    try {
+      // קריאת מידע מ-URL של התמונה באמצעות regex
+      let width = 0;
+      let height = 0;
+      
+      // בדיקת מידע על רזולוציה ב-URL
+      // רוב תמונות ויקיפדיה מכילות את הפורמט הבא: /XXXpx-filename.jpg
+      const widthMatch = imageUrl.match(/\/([0-9]+)px-/);
+      if (widthMatch && widthMatch[1]) {
+        width = parseInt(widthMatch[1]);
+      }
+      
+      // בדיקת תבנית אחרת שלפעמים מופיעה ב-thumb URLs
+      const thumbMatch = imageUrl.match(/\/thumb\/.*?\/([0-9]+)px-/);
+      if (!width && thumbMatch && thumbMatch[1]) {
+        width = parseInt(thumbMatch[1]);
+      }
+      
+      // נסה לחלץ גובה אם קיים בשם הקובץ (פחות נפוץ)
+      const heightMatch = imageUrl.match(/-x([0-9]+)/);
+      if (heightMatch && heightMatch[1]) {
+        height = parseInt(heightMatch[1]);
+      }
+      
+      // אם לא הצלחנו לחלץ את הרוחב מה-URL, נחזיר שהתמונה בסדר
+      // הסיבה: לא כל ה-URLs מכילים מידע על רזולוציה, ועדיין ייתכן שהתמונה באיכות טובה
+      if (width === 0) {
+        return { 
+          isValid: true, 
+          width: 0, 
+          height: 0, 
+          message: "לא ניתן לקבוע רזולוציה מה-URL, התמונה תבדק באופן חזותי" 
+        };
+      }
+      
+      // אם יש רק רוחב, נשער את הגובה לפי יחס סטנדרטי של תמונות פנים
+      if (height === 0) {
+        // יחס של 4:3 מקובל בתמונות פורטרט
+        height = Math.round(width * 0.75);
+      }
+      
+      // בדיקת רזולוציה מינימלית
+      if (width < IMAGE_SETTINGS.MIN_WIDTH || height < IMAGE_SETTINGS.MIN_HEIGHT) {
+        return { 
+          isValid: false, 
+          width, 
+          height, 
+          message: `תמונה קטנה מדי (${width}x${height}), מינימום נדרש: ${IMAGE_SETTINGS.MIN_WIDTH}x${IMAGE_SETTINGS.MIN_HEIGHT}` 
+        };
+      }
+      
+      // בדיקת יחס תצוגה
+      const aspectRatio = height / width;
+      if (aspectRatio < IMAGE_SETTINGS.ASPECT_RATIO_MIN || aspectRatio > IMAGE_SETTINGS.ASPECT_RATIO_MAX) {
+        return { 
+          isValid: false, 
+          width, 
+          height, 
+          message: `יחס תצוגה לא מתאים (${aspectRatio.toFixed(2)}), טווח מותר: ${IMAGE_SETTINGS.ASPECT_RATIO_MIN}-${IMAGE_SETTINGS.ASPECT_RATIO_MAX}` 
+        };
+      }
+      
+      // אם התמונה בסדר אך קטנה מהמינימום המועדף, נחזיר אזהרה
+      if (width < IMAGE_SETTINGS.PREFERRED_MIN_WIDTH || height < IMAGE_SETTINGS.PREFERRED_MIN_HEIGHT) {
+        return { 
+          isValid: true, 
+          width, 
+          height, 
+          message: `התמונה בסדר אך קטנה מהמועדף (${width}x${height})` 
+        };
+      }
+      
+      return { 
+        isValid: true, 
+        width, 
+        height, 
+        message: `תמונה תקינה (${width}x${height})` 
+      };
+    } catch (error) {
+      console.error('Error checking image resolution:', error.message);
+      return { 
+        isValid: true, 
+        width: 0, 
+        height: 0, 
+        message: "שגיאה בבדיקת רזולוציה, מניח שהתמונה תקינה" 
+      };
+    }
+  }
+
+  /**
    * פונקציה לבדיקה אם התמונה היא של פנים אנושיות
    * @param {string} imageUrl - כתובת URL של התמונה
    * @returns {Promise<boolean>} - האם התמונה היא של פנים אנושיות
    */
   async isLikelyHumanFace(imageUrl) {
     try {
+      // בדיקת רזולוציה
+      const resolutionCheck = await this.checkImageResolution(imageUrl);
+      if (!resolutionCheck.isValid) {
+        console.log(`Rejected image due to resolution issue: ${resolutionCheck.message} - URL: ${imageUrl}`);
+        return false;
+      }
+      
       // בדיקה בסיסית - האם יש מילים בשם הקובץ שמעידות על אדם
       const lowercaseUrl = imageUrl.toLowerCase();
       
@@ -33,19 +137,6 @@ class ImageService {
       for (const keyword of nonFaceKeywords) {
         if (lowercaseUrl.includes(keyword)) {
           console.log(`Rejected image with non-face keyword: ${keyword} in URL: ${imageUrl}`);
-          return false;
-        }
-      }
-      
-      // בדיקת גודל ויחס של התמונה
-      const sizeMatcher = /\/(\d+)px-/;
-      const match = imageUrl.match(sizeMatcher);
-      
-      if (match) {
-        const size = parseInt(match[1]);
-        // תמונות קטנות מדי לרוב אינן תמונות פנים טובות - הקטנת הסף מ-100 ל-80
-        if (size < 80) {
-          console.log(`Rejected small image (${size}px): ${imageUrl}`);
           return false;
         }
       }
@@ -97,6 +188,34 @@ class ImageService {
   }
 
   /**
+   * פונקציה לבקשת תמונה גדולה יותר אם התמונה הנוכחית קטנה מדי
+   * @param {string} imageUrl - כתובת URL המקורית של התמונה
+   * @returns {string} - כתובת URL חדשה עם רזולוציה גבוהה יותר
+   */
+  getHigherResolutionUrl(imageUrl) {
+    try {
+      // בדיקה האם מדובר ב-URL של ויקיפדיה עם תבנית של רזולוציה
+      const widthMatch = imageUrl.match(/\/([0-9]+)px-/);
+      
+      if (widthMatch && widthMatch[1]) {
+        const currentWidth = parseInt(widthMatch[1]);
+        
+        // אם הרזולוציה הנוכחית נמוכה מהרצויה, נעלה אותה
+        if (currentWidth < IMAGE_SETTINGS.PREFERRED_REQUEST_SIZE) {
+          // החלפת רוחב הרזולוציה בגודל המועדף
+          return imageUrl.replace(`/${currentWidth}px-`, `/${IMAGE_SETTINGS.PREFERRED_REQUEST_SIZE}px-`);
+        }
+      }
+      
+      // אם לא הצלחנו למצוא את תבנית הרזולוציה או שהרזולוציה כבר גבוהה מספיק, נחזיר את ה-URL המקורי
+      return imageUrl;
+    } catch (error) {
+      console.error('Error getting higher resolution URL:', error.message);
+      return imageUrl; // במקרה של שגיאה, נחזיר את ה-URL המקורי
+    }
+  }
+
+  /**
    * פונקציה לחיפוש תמונות בוויקיפדיה העברית
    * @param {string} searchTerm - מונח החיפוש (שם משפחה או קטגוריה)
    * @param {boolean} isCategory - האם החיפוש הוא לפי קטגוריה
@@ -144,7 +263,8 @@ class ImageService {
       }
 
       // קבלת מידע על הדפים כולל תמונות
-      const pages = await wikipediaService.getPageInfo(humanPageIds);
+      // שימוש בגודל טאמבנייל גבוה יותר
+      const pages = await wikipediaService.getPageInfo(humanPageIds, IMAGE_SETTINGS.THUMBNAIL_SIZE);
       
       if (!pages || Object.keys(pages).length === 0) {
         console.log(`No page info found for ${searchTerm}`);
@@ -161,8 +281,11 @@ class ImageService {
         if (page.thumbnail && page.thumbnail.source) {
           console.log(`Using main thumbnail for ${page.title}: ${page.thumbnail.source}`);
           
-          // בדיקה אם התמונה היא של פנים אנושיות
-          const isHumanFace = await this.isLikelyHumanFace(page.thumbnail.source);
+          // שדרוג רזולוציה אם צריך
+          const potentiallyHigherResUrl = this.getHigherResolutionUrl(page.thumbnail.source);
+          
+          // בדיקה אם התמונה היא של פנים אנושיות ובאיכות טובה
+          const isHumanFace = await this.isLikelyHumanFace(potentiallyHigherResUrl);
           
           if (!isHumanFace) {
             console.log(`Skipping non-human face image: ${page.title}`);
@@ -183,10 +306,13 @@ class ImageService {
           // יצירת אובייקט התמונה
           const imageObject = {
             title: page.title,
-            imageUrl: page.thumbnail.source,
+            imageUrl: potentiallyHigherResUrl,
+            originalUrl: page.thumbnail.source, // שמירת ה-URL המקורי לצורך מעקב
             sourceUrl: page.fullurl || `https://he.wikipedia.org/?curid=${pageId}`,
             group: group,
-            id: `${page.title}_${pageId}` // מזהה ייחודי לתמונה
+            id: `${page.title}_${pageId}`, // מזהה ייחודי לתמונה
+            width: page.thumbnail.width || 0,
+            height: page.thumbnail.height || 0
           };
           
           try {
@@ -231,8 +357,11 @@ class ImageService {
               continue;
             }
             
-            // בדיקה אם התמונה היא של פנים אנושיות
-            const isHumanFace = await this.isLikelyHumanFace(imageUrl);
+            // שדרוג רזולוציה אם צריך
+            const potentiallyHigherResUrl = this.getHigherResolutionUrl(imageUrl);
+            
+            // בדיקה אם התמונה היא של פנים אנושיות ובאיכות טובה
+            const isHumanFace = await this.isLikelyHumanFace(potentiallyHigherResUrl);
             
             if (!isHumanFace) {
               console.log(`Skipping non-human face image: ${page.title} - ${imageUrl}`);
@@ -253,7 +382,8 @@ class ImageService {
             // יצירת אובייקט התמונה
             const imageObject = {
               title: page.title,
-              imageUrl: imageUrl,
+              imageUrl: potentiallyHigherResUrl,
+              originalUrl: imageUrl, // שמירת ה-URL המקורי לצורך מעקב
               sourceUrl: page.fullurl || `https://he.wikipedia.org/?curid=${pageId}`,
               group: group,
               id: `${page.title}_${pageId}` // מזהה ייחודי לתמונה
