@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { humanKeywords, nonHumanKeywords, IMAGE_SETTINGS } = require('../config/constants');
+const { humanKeywords, nonHumanKeywords, humanTextPatterns, nonHumanWikiCategories, KEYWORD_THRESHOLD_RATIO,IMAGE_SETTINGS } = require('../config/constants');
 const ApiUtils = require('../utils/apiUtils');
 
 // יצירת מופע axios עמיד יותר לשגיאות רשת
@@ -235,89 +235,94 @@ class WikipediaService {
               exintro: true,
               explaintext: true,
               format: 'json',
-              pllimit: 30 // הגדלה מ-20 ל-30
+              pllimit: 30
             }
           });
         }, 3, 2000);
-
+  
         if (!response.data.query || !response.data.query.pages || !response.data.query.pages[pageId]) {
           return false;
         }
-
+  
         const page = response.data.query.pages[pageId];
         const extract = page.extract || '';
         const title = page.title || '';
         
-        // סימני זיהוי חזקים של אדם
-        const strongHumanIndicators = [
-          ' נולד ב', ' נולדה ב', 
-          ' הוא איש ', ' היא אישה ',
-          ' החל את הקריירה שלו', ' החלה את הקריירה שלה',
-          ' בוגר ', ' בוגרת ',
-          ' סיים את לימודיו', ' סיימה את לימודיה',
-          ' התחתן ', ' התחתנה ',
-          ' הוא בנו של ', ' היא בתו של ',
-          ' אביו של ', ' אמו של ',
-          ' הוא פוליטיקאי ', ' היא פוליטיקאית ',
-          ' שיחק בסרט ', ' שיחקה בסרט ',
-          ' הופיע בתוכנית ', ' הופיעה בתוכנית ',
-          ' נפטר ', ' נפטרה ',
-          ' התחנך ', ' התחנכה ',
-          ' הצטרף ל', ' הצטרפה ל',
-          ' גדל ב', ' גדלה ב'
-        ];
-        
-        // בדיקה לסימנים חזקים של אדם בטקסט הפתיחה
-        for (const indicator of strongHumanIndicators) {
-          if (extract.includes(indicator)) {
-            return true;
-          }
-        }
-        
-        // בדיקת תבניות ביוגרפיה נפוצות
-        const biographyPatterns = [
-          // תאריך לידה ופטירה
-          /נולד\(ה\) ב.*\d{1,2} ב[א-ת]+ \d{4}/,
-          // גיל
-          /בן \d+ שנים/,
-          /בת \d+ שנים/,
-          // ילידי שנה
-          /יליד(ת)? (שנת )?1\d{3}/,
-          /יליד(ת)? (שנת )?20\d{2}/,
-          // תאריך פטירה
-          /נפטר\(ה\) ב.*\d{1,2} ב[א-ת]+ \d{4}/
-        ];
-        
-        for (const pattern of biographyPatterns) {
-          if (pattern.test(extract)) {
-            return true;
-          }
-        }
-        
-        // בדיקה אם קיימות קטגוריות או קישורים מובהקים לאנשים
+        // 1. בדיקת קטגוריות שמעידות על ערכים שאינם אנשים
         if (page.categories) {
-          // הרחבת רשימת הקטגוריות לזיהוי
-          const humanCategories = [
-            'אישים', 'אנשים', 'ילידי', 'פוליטיקאים', 'שחקנים', 'זמרים', 'סופרים',
-            'אמנים', 'עיתונאים', 'רופאים', 'מדענים', 'מנהלים', 'חברי כנסת', 'שרים',
-            'שופטים', 'עורכי דין', 'מוזיקאים', 'במאים', 'מנהיגים', 'רבנים'
-          ];
           const categoryTitles = page.categories.map(cat => cat.title || '');
           
-          for (const category of humanCategories) {
-            if (categoryTitles.some(cat => cat.includes(category))) {
+          for (const nonHumanCategory of nonHumanWikiCategories) {
+            if (categoryTitles.some(cat => cat.includes(nonHumanCategory))) {
+              console.log(`Rejected by non-human category: ${title} in ${nonHumanCategory}`);
+              return false;
+            }
+          }
+        }
+        
+        // 2. בדיקת תוכן לפי מילות מפתח
+        let nonHumanCount = 0;
+        for (const keyword of nonHumanKeywords) {
+          if (title.includes(keyword) || extract.includes(keyword)) {
+            nonHumanCount++;
+          }
+        }
+        
+        // 3. חיפוש מילות מפתח אנושיות
+        let humanCount = 0;
+        
+        // בדיקת תבניות טקסט חזקות לבני אדם
+        for (const pattern of humanTextPatterns) {
+          if (extract.includes(pattern)) {
+            humanCount += 2; // מתן משקל כפול לתבניות חזקות
+          }
+        }
+        
+        // בדיקת מילות מפתח אנושיות רגילות
+        for (const keyword of humanKeywords) {
+          if (extract.includes(keyword)) {
+            humanCount++;
+          }
+        }
+        
+        // 4. קבלת החלטה לפי היחס בין מילות מפתח לא-אנושיות לאנושיות
+        if (humanCount === 0) {
+          // אם אין בכלל מילות מפתח אנושיות, דחה את הערך
+          console.log(`No human indicators for: ${title}`);
+          return false;
+        }
+        
+        const nonHumanRatio = nonHumanCount / (nonHumanCount + humanCount);
+        
+        if (nonHumanRatio > KEYWORD_THRESHOLD_RATIO) {
+          console.log(`High non-human keyword ratio (${nonHumanRatio.toFixed(2)}) for: ${title}`);
+          return false;
+        }
+        
+        // 5. בדיקת קטגוריות אנושיות
+        if (page.categories) {
+          const categoryTitles = page.categories.map(cat => cat.title || '');
+          const humanCategoryParts = [
+            'אישים', 'אנשים', 'ילידי', 'פוליטיקאים', 'שחקנים', 'זמרים', 
+            'סופרים', 'עיתונאים', 'רופאים', 'מדענים', 'אמנים'
+          ];
+          
+          for (const part of humanCategoryParts) {
+            if (categoryTitles.some(cat => cat.includes(part))) {
+              console.log(`Confirmed human by category: ${title} has ${part}`);
               return true;
             }
           }
         }
         
-        // בדיקת טקסט הפתיחה לזיהוי מילות מפתח - הקלה בתנאים
-        for (const keyword of humanKeywords) {
-          if (extract.includes(keyword)) {
-            return true;
-          }
+        // 6. אם יש מספיק סימנים אנושיים, קבל את הערך
+        if (humanCount >= 3) {
+          console.log(`Accepted: ${title} has ${humanCount} human indicators`);
+          return true;
         }
         
+        // ברירת מחדל: אם הגענו לכאן, אין מספיק ראיות שזה אדם
+        console.log(`Insufficient human evidence for: ${title}`);
         return false;
       });
     } catch (error) {
@@ -325,7 +330,6 @@ class WikipediaService {
       return false;
     }
   }
-
   /**
    * פונקציית עזר לחלוקת מערך לקבוצות קטנות
    * @param {Array} array - המערך לחלוקה
@@ -339,6 +343,106 @@ class WikipediaService {
     }
     return result;
   }
+  
+  /**
+ * פונקציה לחילוץ שנת לידה מתוך טקסט של ערך בוויקיפדיה
+ * @param {string} extract - הטקסט של הערך
+ * @returns {number|null} - שנת הלידה או null אם לא נמצאה
+ */
+extractBirthYear(extract) {
+  if (!extract) return null;
+  
+  // תבניות נפוצות לשנת לידה בויקיפדיה העברית
+  const patterns = [
+    // נולד ב-1234 או נולדה ב-1234
+    /נולד(?:ה)? ב[-–]?(\d{4})/i,
+    // (1234-2345) - תבנית של שנת לידה ופטירה
+    /\((\d{4})[-–](?:\d{4}|)\)/,
+    // (נולד ב-1234) או (נולדה ב-1234)
+    /\(נולד(?:ה)? ב[-–]?(\d{4})\)/i,
+    // יליד/ילידת 1234
+    /יליד(?:ת)? (?:שנת )?(\d{4})/i,
+    // נולד/נולדה בשנת 1234
+    /נולד(?:ה)? בשנת (\d{4})/i,
+    // Xth בחודש Y, 1234 - תבנית תאריך מלא
+    /\d{1,2} ב[א-ת]+ (\d{4})/,
+    // בשנת 1234
+    /בשנת (\d{4})/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = extract.match(pattern);
+    if (match && match[1]) {
+      const year = parseInt(match[1]);
+      // וידוא שהשנה הגיונית (בין 1700 ל-2023 למשל)
+      if (year >= 1700 && year <= 2023) {
+        return year;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * פונקציה משופרת לבדיקה האם הערך מתייחס לאדם שנולד משנה מסוימת
+ * @param {number} pageId - מזהה הדף
+ * @param {number} minYear - שנת לידה מינימלית לסינון (1850 כברירת מחדל)
+ * @returns {Promise<{isHuman: boolean, birthYear: number|null}>} - האם הדף הוא על אדם והאם עומד בתנאי השנה
+ */
+async isHumanArticleWithBirthYear(pageId, minYear = 1850) {
+  try {
+    // שליפת תוכן הערך
+    const response = await ApiUtils.withRetry(async () => {
+      return await robustAxios.get('https://he.wikipedia.org/w/api.php', {
+        params: {
+          action: 'query',
+          pageids: pageId,
+          prop: 'extracts|categories|links',
+          exintro: true,
+          explaintext: true,
+          format: 'json',
+          pllimit: 30
+        }
+      });
+    }, 3, 2000);
+
+    if (!response.data.query || !response.data.query.pages || !response.data.query.pages[pageId]) {
+      return { isHuman: false, birthYear: null };
+    }
+
+    const page = response.data.query.pages[pageId];
+    const extract = page.extract || '';
+    const title = page.title || '';
+    
+    // בדיקה אם זה אדם
+    const isHuman = await this.isHumanArticle(pageId);
+    if (!isHuman) {
+      return { isHuman: false, birthYear: null };
+    }
+    
+    // חילוץ שנת הלידה
+    const birthYear = this.extractBirthYear(extract);
+    
+    // בדיקה אם השנה מתאימה לדרישות
+    if (birthYear && birthYear >= minYear) {
+      console.log(`Found human with valid birth year: ${title} (${birthYear})`);
+      return { isHuman: true, birthYear };
+    }
+    
+    // אם זה אדם אבל השנה לא נמצאה או לא מתאימה
+    if (!birthYear) {
+      console.log(`Human article but birth year not found: ${title}`);
+    } else {
+      console.log(`Human born before minimum year: ${title} (${birthYear} < ${minYear})`);
+    }
+    
+    return { isHuman, birthYear };
+  } catch (error) {
+    console.error(`Error checking article ${pageId}:`, error.message);
+    return { isHuman: false, birthYear: null };
+  }
+}
 }
 
 module.exports = new WikipediaService();
