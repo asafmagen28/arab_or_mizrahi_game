@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ערבי או מזרחי?</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- הוספת Font Awesome לאייקונים -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
   <div class="container">
@@ -14,6 +16,12 @@
       <div class="score-board">
         <div>תשובות נכונות: <span id="correct-count">0</span></div>
         <div>נסיונות: <span id="total-count">0</span>/20</div>
+        <!-- כפתור הפעלת/כיבוי סאונד -->
+        <div class="sound-control">
+          <button id="sound-toggle" class="sound-button sound-on" title="כבה סאונד">
+            <i class="fas fa-volume-up"></i>
+          </button>
+        </div>
       </div>
       
       <div class="progress">

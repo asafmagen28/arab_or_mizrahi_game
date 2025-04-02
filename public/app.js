@@ -1,4 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // טעינת סאונדים
+    const sounds = {
+      arabCorrect: new Audio('/sounds/arab_correct.mp3'),
+      arabIncorrect: new Audio('/sounds/arab_incorrect.mp3'),
+      mizrahiCorrect: new Audio('/sounds/mizrahi_correct.mp3'),
+      mizrahiIncorrect: new Audio('/sounds/mizrahi_incorrect.mp3')
+    };
+
     // מצב המשחק
     const gameState = {
       images: [],
@@ -10,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
       mizrahiCorrect: 0,
       mizrahiTotal: 0,
       isProcessingGuess: false,  // משתנה שמצביע אם יש ניחוש בתהליך
-      failedImageAttempts: 0     // מונה לניסיונות שנכשלו ברצף
+      failedImageAttempts: 0,     // מונה לניסיונות שנכשלו ברצף
+      soundEnabled: true  // האם סאונד מופעל (כברירת מחדל: כן)
     };
   
     // מרכיבי ממשק המשתמש
@@ -31,8 +40,38 @@ document.addEventListener('DOMContentLoaded', () => {
       playAgain: document.getElementById('play-again'),
       successRate: document.getElementById('success-rate'),
       arabSuccessRate: document.getElementById('arab-success-rate'),
-      mizrahiSuccessRate: document.getElementById('mizrahi-success-rate')
+      mizrahiSuccessRate: document.getElementById('mizrahi-success-rate'),
+      soundToggle: document.getElementById('sound-toggle')  // נוסיף אלמנט עבור כפתור הפעלת/כיבוי סאונד
     };
+
+    // פונקציה להשמעת סאונד מתאים לתוצאת הניחוש
+    function playSound(group, correct) {
+      // רק אם הסאונד מופעל
+      if (!gameState.soundEnabled) return;
+      
+      // בחירת הסאונד המתאים לפי קבוצה ותוצאה
+      let sound;
+      if (group === 'arab') {
+        sound = correct ? sounds.arabCorrect : sounds.arabIncorrect;
+      } else { // mizrahi
+        sound = correct ? sounds.mizrahiCorrect : sounds.mizrahiIncorrect;
+      }
+      
+      // השמעת הסאונד
+      if (sound) {
+        // עצירה והחזרה לתחילה אם כבר מושמע
+        sound.pause();
+        sound.currentTime = 0;
+        
+        // נסיון להשמיע עם טיפול בשגיאות
+        const playPromise = sound.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error('Error playing sound:', error);
+          });
+        }
+      }
+    }
   
     // טעינת תמונות היום מהשרת
     async function fetchDailyImages() {
@@ -189,6 +228,9 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.mizrahiTotal++;
       }
       
+      // השמעת הסאונד המתאים
+      playSound(currentImage.group, correct);
+      
       // עדכון ממשק
       showResultOverlay(correct);
       updateScoreDisplay();
@@ -287,6 +329,19 @@ document.addEventListener('DOMContentLoaded', () => {
       
       elements.finalMessage.textContent = message;
     }
+    
+    // פונקציה להפעלה/כיבוי סאונד
+    function toggleSound() {
+      gameState.soundEnabled = !gameState.soundEnabled;
+      
+      // עדכון כפתור הפעלת/כיבוי סאונד
+      if (elements.soundToggle) {
+        elements.soundToggle.classList.toggle('sound-on', gameState.soundEnabled);
+        elements.soundToggle.classList.toggle('sound-off', !gameState.soundEnabled);
+        elements.soundToggle.title = gameState.soundEnabled ? 'כבה סאונד' : 'הפעל סאונד';
+        elements.soundToggle.innerHTML = gameState.soundEnabled ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+      }
+    }
   
     // אירועי לחצנים
     elements.btnArab.addEventListener('click', () => checkGuess('arab'));
@@ -296,6 +351,11 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.gameContainer.style.display = 'block';
       startGame();
     });
+    
+    // הוספת האזנה לכפתור הפעלת/כיבוי סאונד אם קיים
+    if (elements.soundToggle) {
+      elements.soundToggle.addEventListener('click', toggleSound);
+    }
   
     // התחלת המשחק עם טעינת הדף
     fetchDailyImages();
