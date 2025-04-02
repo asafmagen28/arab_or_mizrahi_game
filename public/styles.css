@@ -222,3 +222,46 @@ body {
       font-size: 16px;
     }
   }
+
+  .sound-control {
+    display: flex;
+    justify-content: center;
+    margin-right: 10px;
+  }
+  
+  .sound-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    color: #555;
+    padding: 5px;
+    border-radius: 50%;
+    transition: all 0.3s;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .sound-button:hover {
+    background-color: #f0f0f0;
+  }
+  
+  .sound-button.sound-on {
+    color: #4CAF50;
+  }
+  
+  .sound-button.sound-off {
+    color: #F44336;
+  }
+  
+  .score-board {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 350px;
+    margin: 0 auto 20px;
+    font-size: 18px;
+  }
