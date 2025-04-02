@@ -22,6 +22,11 @@ app.use(express.static(path.join(__dirname, '../public')));
 // קבלת התמונות היומיות
 app.get('/api/daily-images', imagesController.getDailyImages);
 
+// בקובץ server.js או בקובץ הראשי של השרת
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
 // תיעוד ניחושי המשתמשים
 app.post('/api/log-guess', (req, res) => guessController.logGuess(req, res));
 
