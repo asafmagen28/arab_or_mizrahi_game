@@ -531,7 +531,8 @@ async generateDailyImages(minBirthYear = 1850) {
 
   if (this.todaysImages.length > 0) {
     try {
-      await dataService.updateHistoricalImages(allNewImages);
+      //await dataService.updateHistoricalImages(allNewImages);
+      await dataService.updateHistoricalImages(this.todaysImages);
     } catch (error) {
       console.error('Error updating historical images:', error);
     }
